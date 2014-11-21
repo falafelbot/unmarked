@@ -8,7 +8,7 @@
 
 \arguments{
     \item{formula}{double right-hand side formula describing covariates of
-        detection and occupancy in that order.}
+        detection and abundance, in that order.}
     \item{data}{Object of class \code{\link{unmarkedFrameOccu}} supplying data
         to the model.}
     \item{K}{the upper summation index used to numerically integrate out the
@@ -60,10 +60,19 @@ pp. 777--790.
 
 \examples{
 
+\dontrun{
+
 data(birds)
 woodthrushUMF <- unmarkedFrameOccu(woodthrush.bin)
 # survey occasion-specific detection probabilities
 (fm.wood.rn <- occuRN(~ obsNum ~ 1, woodthrushUMF))
+
+# Empirical Bayes estimates of abundance at each site
+re <- ranef(fm.wood.rn)
+plot(re)
+
+
+}
 
 }
 

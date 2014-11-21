@@ -93,6 +93,10 @@ confint(fm, type='det', method = 'profile')
 (btlc <- backTransform(lc))
 confint(btlc, level = 0.9)
 
+# Empirical Bayes estimates of proportion of sites occupied
+re <- ranef(fm)
+sum(bup(re, stat="mode"))
+
 }
 
 \keyword{models}

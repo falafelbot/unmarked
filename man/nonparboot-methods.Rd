@@ -9,6 +9,9 @@
 \alias{nonparboot,unmarkedFitOccu-method}
 \alias{nonparboot,unmarkedFitOccuRN-method}
 \alias{nonparboot,unmarkedFitPCount-method}
+\alias{nonparboot,unmarkedFitGDS-method}
+\alias{nonparboot,unmarkedFitGMM-method}
+\alias{nonparboot,unmarkedFitPCO-method}
 \title{ Nonparametric bootstrapping in unmarked }
 \description{
 Call \code{nonparboot} on an unmarkedFit to obtain non-parametric
@@ -49,6 +52,10 @@ get bootstrap estimates of standard errors.
   \code{\link{linearComb}} or \code{\link{backTransform}} can be
   instructed to use bootstrap samples by providing the argument
   \code{method = "nonparboot"}.
+
+  For \code{\link{occu}} and \code{\link{occuRN}} both sites and
+  occassions are re-sampled. For all other fitting functions, only sites
+  are re-sampled.
 
 }
 \examples{
