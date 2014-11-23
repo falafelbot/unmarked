@@ -75,15 +75,55 @@ void tp5(arma::mat& g3, int lk, double gam, double om) {
     }
     for(int n1=1; n1<lk; n1++) {
 	   for(int n2=0; n2<lk; n2++) {
-	     g3.at(n1, n2) = Rf_dpois(n2, n1*exp(gam * (1 - log(n1)/log(om))), false);
+	     g3.at(n1, n2) = Rf_dpois(n2, n1*exp(gam * (1 - log(n1 + 1)/log(om + 1))), false);
+	   }
+    }
+}
+
+// autoregressive + immigration model
+void tp6(arma::mat& g3, int lk, double gam, double om, double imm) {
+    int Nmin=0;
+    for(int n1=0; n1<lk; n1++) {
+	for(int n2=0; n2<lk; n2++) {
+	    Nmin = std::min(n1, n2);
+	    for(int c=0; c<=Nmin; c++) {
+		g3.at(n1, n2) += exp(Rf_dbinom(c, n1, om, true) +
+				  Rf_dpois(n2-c, gam*n1 + imm, true));
+	    }
+	}
+    }
+}
+
+// trend + immigration model 
+void tp7(arma::mat& g3, int lk, double gam, double imm) {
+    for(int n1=0; n1<lk; n1++) {
+      for(int n2=0; n2<lk; n2++) {
+        g3.at(n1, n2) = Rf_dpois(n2, n1*gam+imm, false);
+      }
+    }
+}
+
+// Ricker + immigration model
+void tp8(arma::mat& g3, int lk, double gam, double om, double imm) {
+    for(int n1=0; n1<lk; n1++) {
+	for(int n2=0; n2<lk; n2++) {
+	  g3.at(n1, n2) = Rf_dpois(n2, n1*exp(gam*(1-n1/om)) + imm, false);
+	}
+    }
+}
+
+// Gompertz + immigration model
+void tp9(arma::mat& g3, int lk, double gam, double om, double imm) {
+    for(int n1=0; n1<lk; n1++) {
+	   for(int n2=0; n2<lk; n2++) {
+	     g3.at(n1, n2) = Rf_dpois(n2, n1*exp(gam * (1 - log(n1 + 1)/log(om + 1))) + imm, false);
 	   }
     }
 }
 
 
 
-
-SEXP nll_pcountOpen( SEXP y_, SEXP Xlam_, SEXP Xgam_, SEXP Xom_, SEXP Xp_, SEXP beta_lam_, SEXP beta_gam_, SEXP beta_om_, SEXP beta_p_, SEXP log_alpha_, SEXP Xlam_offset_, SEXP Xgam_offset_, SEXP Xom_offset_, SEXP Xp_offset_, SEXP ytna_, SEXP yna_, SEXP lk_, SEXP mixture_, SEXP first_, SEXP last_, SEXP M_, SEXP J_, SEXP T_, SEXP delta_, SEXP dynamics_, SEXP fix_, SEXP go_dims_, SEXP I_, SEXP I1_, SEXP Ib_, SEXP Ip_) {
+SEXP nll_pcountOpen( SEXP y_, SEXP Xlam_, SEXP Xgam_, SEXP Xom_, SEXP Xp_, SEXP Xiota_, SEXP beta_lam_, SEXP beta_gam_, SEXP beta_om_, SEXP beta_p_, SEXP beta_iota_, SEXP log_alpha_, SEXP Xlam_offset_, SEXP Xgam_offset_, SEXP Xom_offset_, SEXP Xp_offset_, SEXP Xiota_offset_, SEXP ytna_, SEXP yna_, SEXP lk_, SEXP mixture_, SEXP first_, SEXP last_, SEXP M_, SEXP J_, SEXP T_, SEXP delta_, SEXP dynamics_, SEXP fix_, SEXP go_dims_, SEXP immigration_, SEXP I_, SEXP I1_, SEXP Ib_, SEXP Ip_) {
   int lk = as<int>(lk_);
   Rcpp::IntegerVector N = seq_len(lk)-1;
   int M = as<int>(M_);
@@ -94,19 +134,23 @@ SEXP nll_pcountOpen( SEXP y_, SEXP Xlam_, SEXP Xgam_, SEXP Xom_, SEXP Xp_, SEXP 
   arma::mat Xgam = as<arma::mat>(Xgam_);
   arma::mat Xom = as<arma::mat>(Xom_);
   arma::mat Xp = as<arma::mat>(Xp_);
+  arma::mat Xiota = as<arma::mat>(Xiota_);
   arma::colvec beta_lam = as<arma::colvec>(beta_lam_);
   arma::colvec beta_gam = as<arma::colvec>(beta_gam_);
   arma::colvec beta_om = as<arma::colvec>(beta_om_);
   arma::colvec beta_p = as<arma::colvec>(beta_p_);
+  arma::colvec beta_iota = as<arma::colvec>(beta_iota_);
   double log_alpha = as<double>(log_alpha_);
   arma::colvec Xlam_offset = as<arma::colvec>(Xlam_offset_);
   arma::colvec Xgam_offset = as<arma::colvec>(Xgam_offset_);
   arma::colvec Xom_offset = as<arma::colvec>(Xom_offset_);
   arma::colvec Xp_offset = as<arma::colvec>(Xp_offset_);
+  arma::colvec Xiota_offset = as<arma::colvec>(Xiota_offset_);
   std::string mixture = as<std::string>(mixture_);
   std::string dynamics = as<std::string>(dynamics_);
   std::string fix = as<std::string>(fix_);
   std::string go_dims = as<std::string>(go_dims_);
+  bool immigration = as<bool>(immigration_);
   arma::imat I = as<arma::imat>(I_);
   arma::imat I1 = as<arma::imat>(I1_);
   Rcpp::List Ib(Ib_);
@@ -148,6 +192,13 @@ SEXP nll_pcountOpen( SEXP y_, SEXP Xlam_, SEXP Xgam_, SEXP Xom_, SEXP Xp_, SEXP 
   arma::mat pv = 1.0/(1.0+exp(-1*(Xp*beta_p + Xp_offset)));
   pv.reshape(J*T, M);
   arma::mat pm = trans(pv);
+  //Immigration
+  arma::mat iotav = arma::zeros<arma::colvec>(M*(T-1));
+  if(immigration) {
+    iotav = exp(Xiota*beta_iota + Xiota_offset);
+  }
+  iotav.reshape(T-1, M);
+  arma::mat iota = arma::trans(iotav);
   // format matrices as cubes (shouldn't be done in likelihood)
   arma::icube y(M,J,T);
   arma::cube p(M,J,T);
