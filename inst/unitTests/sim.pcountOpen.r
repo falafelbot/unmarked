@@ -896,12 +896,10 @@ dev.off()
 
 sim14 <- function(lambda=1, gamma=0.1, omega=1.5, p=0.7, M=100, T=5)
 {
-    if (identical(omega, 1))
-        stop("Omega should not equal 1")
     y <- N <- matrix(NA, M, T)
     N[,1] <- rpois(M, lambda)
     for(t in 2:T) {
-        N[,t] <- rpois(M, N[,t-1]*exp(gamma*(1-ifelse(N[,t-1]==0, 0, log(N[,t-1])/log(omega)))))
+        N[,t] <- rpois(M, N[,t-1]*exp(gamma*(1-log(N[,t-1]+1)/log(omega+1))))
     }
     y[] <- rbinom(M*T, N, p)
     return(y)
@@ -934,6 +932,50 @@ hist(simout14[,1], xlab=expression(lambda)); abline(v=lambda, lwd=2, col=4)
 hist(simout14[,2], xlab=expression(gamma)); abline(v=gamma, lwd=2, col=4)
 hist(simout14[,3], xlab=expression(omega)); abline(v=omega, lwd=2, col=4)
 hist(simout14[,4], xlab=expression(p)); abline(v=p, lwd=2, col=4)
+dev.off()
+
+
+
+## Simulate trend + immigration model 
+
+sim15 <- function(lambda=1, gamma=0.5, iota=1, p=0.7, M=100, T=5)
+{
+    y <- N <- matrix(NA, M, T)
+    N[,1] <- rpois(M, lambda)
+    for(t in 2:T) {
+        N[,t] <- rpois(M, gamma*N[,t-1] + iota)
+        }
+    y[] <- rbinom(M*T, N, p)
+    return(y)
+}
+
+set.seed(3223)
+nsim15 <- 200
+simout15 <- matrix(NA, nsim15, 4)
+colnames(simout15) <- c('lambda', 'gamma', 'iota', 'p')
+for(i in 1:nsim15) {
+    cat("sim15:", i, "\n")
+    lambda <- 2
+    gamma <- 0.25
+    iota <- 0.5
+    p <- 0.7
+    y.sim15 <- sim15(lambda, gamma, omega, p)
+    umf15 <- unmarkedFramePCO(y = y.sim15, numPrimary=5)
+    m15 <- pcountOpen(~1, ~1, ~1, ~1, umf15, K=40, dynamics="trend",
+        starts=c(log(lambda), log(gamma), plogis(p), log(iota)),
+        se=FALSE, immigration=TRUE, iotaformula=~1)
+    e <- coef(m15)
+    simout15[i, 1:3] <- exp(e[c(1:2,4)])
+    simout15[i, 4] <- plogis(e[3])
+    cat("  mle =", simout15[i,], "\n")
+    }
+
+#png("pcountOpenSim1.png", width=6, height=6, units="in", res=360)
+par(mfrow=c(2,2))
+hist(simout15[,1], xlab=expression(lambda)); abline(v=lambda, lwd=2, col=4)
+hist(simout15[,2], xlab=expression(gamma)); abline(v=gamma, lwd=2, col=4)
+hist(simout15[,3], xlab=expression(iota)); abline(v=iota, lwd=2, col=4)
+hist(simout15[,4], xlab=expression(p)); abline(v=p, lwd=2, col=4)
 dev.off()
 
 

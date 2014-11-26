@@ -47,7 +47,8 @@ setClass("unmarkedFitPCount",
 setClass("unmarkedFitPCO",
         representation(
             formlist = "list",
-            dynamics = "character"),
+            dynamics = "character",
+            immigration = "logical"),
         contains = "unmarkedFitPCount")
 
 
@@ -730,10 +731,13 @@ setMethod("predict", "unmarkedFitPCO",
     if(missing(newdata) || is.null(newdata))
         newdata <- getData(object)
     dynamics <- object@dynamics
+    immigration <- tryCatch(object@immigration, error=function(e) FALSE)
     if(identical(dynamics, "notrend") & identical(type, "gamma"))
         stop("gamma is a derived parameter for this model: (1-omega)*lambda")
     if(identical(dynamics, "trend") && identical(type, "omega"))
         stop("omega is not a parameter in the dynamics='trend' model")
+    if(!immigration && identical(type, "iota"))
+        stop("iota is not a parameter in the immigration=FALSE model")
     formula <- object@formula
     formlist <- object@formlist
     if(inherits(newdata, "unmarkedFrame"))
@@ -763,6 +767,10 @@ setMethod("predict", "unmarkedFitPCO",
                     X <- D$Xom
                     offset <- D$Xom.offset
                 },
+                iota = {
+                    X <- D$Xiota
+                    offset <- D$Xiota.offset
+                },
                 det = {
                     X <- D$Xp
                     offset <- D$Xp.offset
@@ -773,6 +781,7 @@ setMethod("predict", "unmarkedFitPCO",
             gammaformula <- formlist$gammaformula
             omegaformula <- formlist$omegaformula
             pformula <- formlist$pformula
+            iotaformula <- formlist$iotaformula
             switch(type,
                 lambda = {
                     mf <- model.frame(lambdaformula, newdata)
@@ -787,6 +796,11 @@ setMethod("predict", "unmarkedFitPCO",
                 omega = {
                     mf <- model.frame(omegaformula, newdata)
                     X <- model.matrix(omegaformula, mf)
+                    offset <- model.offset(mf)
+                },
+                iota = {
+                    mf <- model.frame(iotaformula, newdata)
+                    X <- model.matrix(iotaformula, mf)
                     offset <- model.offset(mf)
                 },
                 det = {
@@ -1326,11 +1340,13 @@ setMethod("fitted", "unmarkedFitPCO",
 {
     dynamics <- object@dynamics
     mixture <- object@mixture
+    immigration <- tryCatch(object@immigration, error=function(e) FALSE)
     data <- getData(object)
     D <- getDesign(data, object@formula, na.rm = na.rm)
-    Xlam <- D$Xlam; Xgam <- D$Xgam; Xom <- D$Xom; Xp <- D$Xp
+    Xlam <- D$Xlam; Xgam <- D$Xgam; Xom <- D$Xom; Xp <- D$Xp; Xiota <- D$Xiota
     Xlam.offset <- D$Xlam.offset; Xgam.offset <- D$Xgam.offset
     Xom.offset <- D$Xom.offset; Xp.offset <- D$Xp.offset
+    Xiota.offset <- D$Xiota.offset
     delta <- D$delta #FIXME this isn't returned propertly when na.rm=F
 
     y <- D$y
@@ -1342,6 +1358,7 @@ setMethod("fitted", "unmarkedFitPCO",
     if(is.null(Xgam.offset)) Xgam.offset <- rep(0, M*(T-1))
     if(is.null(Xom.offset)) Xom.offset <- rep(0, M*(T-1))
     if(is.null(Xp.offset)) Xp.offset <- rep(0, M*T*J)
+    if(is.null(Xiota.offset)) Xiota.offset <- rep(0, M*(T-1))
 
     lambda <- exp(Xlam %*% coef(object, 'lambda') + Xlam.offset)
     if(identical(mixture, "ZIP")) {
@@ -1358,6 +1375,11 @@ setMethod("fitted", "unmarkedFitPCO",
         if(identical(dynamics, "notrend"))
             gamma <- (1-omega)*lambda
         }
+    if(immigration)
+        iota <- matrix(exp(Xiota %*% coef(object, 'iota') + Xiota.offset),
+                        M, T-1, byrow=TRUE)
+    else
+        iota <- matrix(0, M, T-1)
     p <- getP(object, na.rm = na.rm) # Should return MxJT
     N <- matrix(NA, M, T)
     for(i in 1:M) {
@@ -2481,6 +2503,7 @@ setMethod("simulate", "unmarkedFitPCO",
     mix <- object@mixture
     dynamics <- object@dynamics
     umf <- object@data
+    immigration <- tryCatch(object@immigration, error=function(e) FALSE)
     D <- getDesign(umf, object@formula, na.rm = na.rm)
     Xlam <- D$Xlam; Xgam <- D$Xgam; Xom <- D$Xom; Xp <- D$Xp
     Xlam.offset <- D$Xlam.offset; Xgam.offset <- D$Xgam.offset
@@ -2508,6 +2531,11 @@ setMethod("simulate", "unmarkedFitPCO",
                         M, T-1, byrow=TRUE)
     else
         omega <- matrix(-999, M, T-1) # placeholder
+    if(immigration)
+        iota <- matrix(exp(Xiota %*% coef(object, 'iota') + Xiota.offset),
+                        M, T-1, byrow=TRUE)
+    else
+        iota <- matrix(0, M, T-1)
     if(identical(mix, "ZIP"))
         psi <- plogis(coef(object, type="psi"))
     p <- getP(object, na.rm = na.rm)
